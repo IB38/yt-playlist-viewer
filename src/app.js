@@ -5,6 +5,10 @@ const $ = id => document.getElementById(id);
 const number = new Intl.NumberFormat('en-US');
 const date = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const formatDate = value => value ? date.format(new Date(value)) : '—';
+const localDateTime = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric', month: 'long', day: 'numeric',
+  hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'long',
+});
 let playlist = null;
 let direction = 'asc';
 let controller = null;
@@ -52,7 +56,11 @@ function renderVideos() {
     row.append(element('td', 'view-count', video.viewCount == null ? '—' : number.format(video.viewCount)));
     const dateCell = element('td', 'upload-date');
     const time = element('time', '', formatDate(video.publishedAt));
-    if (video.publishedAt) time.dateTime = video.publishedAt;
+    if (video.publishedAt) {
+      time.dateTime = video.publishedAt;
+      time.title = localDateTime.format(new Date(video.publishedAt));
+      time.setAttribute('aria-label', time.title);
+    }
     dateCell.append(time); row.append(dateCell); fragment.append(row);
   }
   $('video-rows').replaceChildren(fragment);
@@ -84,6 +92,7 @@ function showPlaylist(data, demo = false) {
   $('total-views').textContent = known.length ? number.format(known.reduce((sum, video) => sum + video.viewCount, 0n)) : '—';
   const dates = data.videos.map(video => video.publishedAt).filter(Boolean).sort();
   $('latest-upload').textContent = formatDate(dates.at(-1));
+  $('latest-upload').title = dates.length ? localDateTime.format(new Date(dates.at(-1))) : '';
   const missing = data.videos.filter(video => video.unavailable).length;
   const unknown = data.videos.length - known.length;
   $('unavailable-note').hidden = !missing && !unknown;

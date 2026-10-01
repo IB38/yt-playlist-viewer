@@ -47,6 +47,7 @@ npm run build
 - Accepts a playlist ID or a YouTube URL containing a `list` parameter, including mobile, music, and watch links.
 - Loads the playlist name and every available page of playlist entries, then fetches video metadata in batches of 50 unique video IDs.
 - Lists each video's title, clickable URL, exact view count, and upload/publication date in UTC.
+- Hover over an upload date to see the full publication date and time in your browser's local timezone, including the timezone name.
 - Sorts by title, view count, or date in either direction, or restores playlist order. Title search works locally without API requests.
 - Preserves repeated entries and marks private/deleted entries when YouTube returns them. Unknown values sort last. The total sums video view counts per playlist entry, not views attributable to the playlist.
 - Uses the video's `snippet.publishedAt`, not the date it was added to the playlist. YouTube's public publication timestamp may differ from the original upload time for formerly private videos.
