@@ -21,6 +21,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate YouTube API key
+        env:
+          YOUTUBE_API_KEY: ${{ vars.YOUTUBE_API_KEY }}
+        run: |
+          node -e "if (!process.env.YOUTUBE_API_KEY?.trim()) { console.error('::error::Set the repository Actions variable YOUTUBE_API_KEY before deploying.'); process.exit(1); }"
       - run: npm test
       - run: npm run build
         env:
