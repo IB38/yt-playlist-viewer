@@ -2,6 +2,10 @@
 
 A responsive, single-page YouTube playlist explorer for GitHub Pages. Plain HTML, CSS, and JavaScript; no runtime dependencies or backend.
 
+## Production site
+
+Visit **[playlist-lens.dev](https://playlist-lens.dev/)** to use the live application, hosted on GitHub Pages with a custom domain.
+
 ## Run locally
 
 Requires Node.js 22 or later. No package installation is needed.
