@@ -8,6 +8,8 @@ Visit **[playlist-lens.dev](https://playlist-lens.dev/)** to use the live applic
 
 ## Run locally
 
+The footer shows the deployed version as `branch@commit` (for example, `master@e7d41be`). GitHub Actions supplies the deployment branch and commit during the build. Local builds read Git metadata and append `-dirty` when there are uncommitted changes, including untracked files. The development server reads the version when it starts; restart it to update the label. Without Git metadata, the footer shows `Development`.
+
 Requires Node.js 22 or later. No package installation is needed.
 
 ```sh
