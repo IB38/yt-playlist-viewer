@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f8fa">
+    <meta name="description" content="See the whole picture of a YouTube playlist. Explore, filter, and sort videos by title, views, or upload date.">
+    <title>Playlist Lens · YouTube playlist explorer</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <header class="site-header"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">▶</span>Playlist<span class="brand-light">Lens</span></a><span class="header-note">A clearer view of YouTube</span></header>
+    <main>
+      <section class="intro">
+        <div class="eyebrow"><span></span> YOUR PLAYLIST, IN PERSPECTIVE</div>
+        <h1>Less scrolling.<br>More <span>discovering.</span></h1>
+        <p>Turn any YouTube playlist into an easy-to-explore overview.<br class="desktop-break"> Find the most watched, the newest, and everything in between.</p>
+      </section>
+      <section class="loader-card" aria-label="Load a playlist">
+        <form id="playlist-form">
+          <label for="playlist-input">YouTube playlist</label>
+          <div class="input-row"><div class="input-wrap"><span aria-hidden="true">↗</span><input id="playlist-input" name="playlist" placeholder="Paste a playlist URL or ID" required autocomplete="off" spellcheck="false"></div><button class="primary" id="load-button" type="submit">Explore playlist <span aria-hidden="true">→</span></button><button id="cancel-button" class="secondary" type="button" hidden>Cancel</button></div>
+          <div class="form-bottom"><span>Public and unlisted playlists · Powered by YouTube Data API</span><button id="demo-button" class="text-button" type="button">Try a demo <span aria-hidden="true">↗</span></button></div>
+        </form>
+        <p id="status" role="status" hidden></p>
+        <p id="error" role="alert" hidden></p>
+        <p id="setup-notice" class="setup-notice" hidden>One-time setup: add your shared YouTube API key to <code>config.js</code>, or set the GitHub Actions variable <code>YOUTUBE_API_KEY</code>. You can explore the demo now.</p>
+      </section>
+      <section id="welcome" class="welcome">
+        <div class="welcome-icon" aria-hidden="true">☷</div><h2>The whole playlist. One place.</h2><p>Your videos will appear here, with the details that matter.</p>
+        <div class="feature-row"><span><b aria-hidden="true">↕</b> Sort your way</span><span><b aria-hidden="true">◷</b> See upload dates</span><span><b aria-hidden="true">▥</b> Compare views</span></div>
+      </section>
+      <section id="results" hidden aria-labelledby="playlist-title">
+        <div class="playlist-heading"><div><div class="eyebrow" id="playlist-label">PLAYLIST OVERVIEW</div><h2 id="playlist-title"></h2><p id="playlist-owner"></p></div><a id="playlist-link" class="secondary" target="_blank" rel="noopener noreferrer">Open in YouTube ↗</a></div>
+        <div class="stats"><div><span>Videos in playlist</span><strong id="video-count">0</strong></div><div><span>Total video views</span><strong id="total-views">0</strong></div><div><span>Latest upload</span><strong id="latest-upload">—</strong></div></div>
+        <p id="unavailable-note" class="muted" hidden></p>
+        <div class="toolbar"><div class="search-wrap"><label class="sr-only" for="search">Search video titles</label><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a video…"></div><div class="sort-controls"><label for="sort">Sort by</label><select id="sort"><option value="position">Playlist order</option><option value="title">Title</option><option value="viewCount">View count</option><option value="publishedAt">Upload date</option></select><button id="direction" class="secondary" type="button" aria-label="Switch to descending order" title="Switch to descending order">↑</button></div></div>
+        <div class="table-wrap"><table><caption class="sr-only">Playlist videos and statistics</caption><thead><tr><th scope="col" class="number-column">#</th><th scope="col" data-sort="title"><button type="button">Video <span aria-hidden="true">↕</span></button></th><th scope="col" data-sort="viewCount" class="views-column"><button type="button">Views <span aria-hidden="true">↕</span></button></th><th scope="col" data-sort="publishedAt" class="date-column"><button type="button">Uploaded <span aria-hidden="true">↕</span></button></th></tr></thead><tbody id="video-rows"></tbody></table><p id="no-results" hidden>No videos match your search.</p></div>
+        <div class="table-footer"><span id="visible-count"></span><span>Upload dates shown in UTC</span></div>
+      </section>
+    </main>
+    <footer><span class="footer-brand">Playlist Lens</span><span>A little more insight. A lot less scrolling.</span><a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer">YouTube ↗</a></footer>
+  </body>
+</html>
