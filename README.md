@@ -46,6 +46,7 @@ npm run build
 
 - Accepts a playlist ID or a YouTube URL containing a `list` parameter, including mobile, music, and watch links.
 - Loads the playlist name and every available page of playlist entries, then fetches video metadata in batches of 50 unique video IDs.
+- Caches video details (including unavailable results) in memory by video ID for one hour. Repeated loads and overlapping playlists fetch only missing or expired video details, still in batches of up to 50. Playlist names and membership are fetched on each load. Refreshing or closing the page clears the cache; it is not shared across tabs or visitors. View counts can remain unchanged during the cache lifetime. Failed or canceled requests are not cached.
 - Lists each video's title, clickable URL, exact view count, and upload/publication date in UTC.
 - Hover over an upload date to see the full publication date and time in your browser's local timezone, including the timezone name.
 - Sorts by title, view count, or date in either direction, or restores playlist order. Title search works locally without API requests.

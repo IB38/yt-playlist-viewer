@@ -70,3 +70,69 @@ test('handles an empty playlist without requesting video details', async () => {
   assert.deepEqual(data.videos, []);
   assert.equal(calls, 2);
 });
+
+function cachedPlaylistFixture() {
+  const batches = [];
+  const videoCache = new Map();
+  let fail = false;
+  const fetchImpl = async url => {
+    let body;
+    if (url.pathname.endsWith('/playlists')) body = { items: [{ snippet: { title: 'Playlist', channelTitle: 'Owner' } }] };
+    if (url.pathname.endsWith('/playlistItems')) {
+      const ids = url.searchParams.get('playlistId') === 'first' ? ['shared', 'unavailable', 'shared'] : ['shared', 'new'];
+      body = { items: ids.map(videoId => ({ contentDetails: { videoId }, snippet: { title: 'Fallback' } })) };
+    }
+    if (url.pathname.endsWith('/videos')) {
+      const ids = url.searchParams.get('id').split(',');
+      batches.push(ids);
+      if (fail) throw new TypeError('Network failure');
+      body = { items: ids.filter(id => id !== 'unavailable').map(id => ({ id, snippet: { title: id, publishedAt: '2025-01-01T23:45:12Z' }, statistics: { viewCount: '123' } })) };
+    }
+    return { ok: true, json: async () => body };
+  };
+  return { batches, videoCache, fetchImpl, setFail: value => { fail = value; } };
+}
+
+test('reuses cached videos across playlists while preserving playlist-specific links and duplicates', async () => {
+  const fixture = cachedPlaylistFixture();
+  await loadPlaylist('first', 'key', fixture);
+  const repeated = await loadPlaylist('first', 'key', fixture);
+  assert.deepEqual(fixture.batches, [['shared', 'unavailable']]);
+  assert.equal(repeated.videos.length, 3);
+  assert.equal(repeated.videos[1].unavailable, true);
+  const overlap = await loadPlaylist('second', 'key', fixture);
+  assert.deepEqual(fixture.batches, [['shared', 'unavailable'], ['new']]);
+  assert.equal(overlap.videos[0].url, 'https://www.youtube.com/watch?v=shared&list=second');
+  assert.equal(overlap.videos[0].viewCount, 123n);
+  assert.equal(overlap.videos[0].publishedAt, '2025-01-01T23:45:12Z');
+});
+
+test('refetches expired video details and unavailable entries', async () => {
+  const fixture = cachedPlaylistFixture();
+  await loadPlaylist('first', 'key', fixture);
+  for (const entry of fixture.videoCache.values()) entry.expiresAt = Date.now() - 1;
+  await loadPlaylist('first', 'key', fixture);
+  assert.deepEqual(fixture.batches, [['shared', 'unavailable'], ['shared', 'unavailable']]);
+  assert.ok(fixture.videoCache.get('shared').expiresAt > Date.now());
+});
+
+test('failed and canceled video requests do not poison the cache', async () => {
+  const fixture = cachedPlaylistFixture();
+  fixture.setFail(true);
+  await assert.rejects(loadPlaylist('first', 'key', fixture), /internet connection/);
+  assert.equal(fixture.videoCache.size, 0);
+  fixture.setFail(false);
+  const controller = new AbortController();
+  await assert.rejects(loadPlaylist('first', 'key', {
+    ...fixture, signal: controller.signal,
+    fetchImpl: async url => {
+      const response = await fixture.fetchImpl(url);
+      if (url.pathname.endsWith('/videos')) controller.abort();
+      return response;
+    },
+  }), { name: 'AbortError' });
+  assert.equal(fixture.videoCache.size, 0);
+  await loadPlaylist('first', 'key', fixture);
+  assert.equal(fixture.videoCache.size, 2);
+  assert.equal(fixture.batches.length, 3);
+});

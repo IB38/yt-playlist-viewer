@@ -40,7 +40,11 @@ function apiError(status, body) {
   return 'YouTube is temporarily unavailable. Please try again.';
 }
 
-export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, fetchImpl = fetch } = {}) {
+// Shared across playlist loads in this tab; refreshing the page clears it.
+const videoDetailsCache = new Map();
+const VIDEO_CACHE_TTL_MS = 60 * 60 * 1000;
+
+export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, fetchImpl = fetch, videoCache = videoDetailsCache } = {}) {
   async function request(endpoint, params) {
     const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
     url.search = new URLSearchParams({ ...params, key: apiKey });
@@ -53,6 +57,7 @@ export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, 
     let body;
     try { body = await response.json(); }
     catch { throw new Error('YouTube returned an unexpected response. Please try again.'); }
+    signal?.throwIfAborted();
     if (!response.ok) throw new Error(apiError(response.status, body));
     return body;
   }
@@ -70,10 +75,30 @@ export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, 
   } while (pageToken);
   const ids = [...new Set(entries.map(item => item.contentDetails?.videoId || item.snippet?.resourceId?.videoId).filter(Boolean))];
   const details = new Map();
-  for (let offset = 0; offset < ids.length; offset += 50) {
-    const page = await request('videos', { part: 'snippet,statistics', id: ids.slice(offset, offset + 50).join(',') });
-    for (const video of page.items || []) details.set(video.id, video);
-    onProgress(`Loading video details · ${Math.min(offset + 50, ids.length).toLocaleString()} of ${ids.length.toLocaleString()}`);
+  const now = Date.now();
+  for (const [videoId, entry] of videoCache) {
+    if (entry.expiresAt <= now) videoCache.delete(videoId);
+  }
+  const missingIds = ids.filter(videoId => {
+    const cached = videoCache.get(videoId);
+    if (!cached) return true;
+    details.set(videoId, cached.video);
+    return false;
+  });
+  const cachedCount = ids.length - missingIds.length;
+  if (cachedCount) onProgress(`Reusing ${cachedCount.toLocaleString()} cached video details…`);
+  for (let offset = 0; offset < missingIds.length; offset += 50) {
+    const batch = missingIds.slice(offset, offset + 50);
+    const page = await request('videos', { part: 'snippet,statistics', id: batch.join(',') });
+    const fetched = new Map((page.items || []).map(video => [video.id, video]));
+    const expiresAt = Date.now() + VIDEO_CACHE_TTL_MS;
+    for (const videoId of batch) {
+      // Cache absent videos too, but never cache failed or canceled requests.
+      const video = fetched.get(videoId) || null;
+      videoCache.set(videoId, { video, expiresAt });
+      details.set(videoId, video);
+    }
+    onProgress(`Loading video details · ${(cachedCount + Math.min(offset + 50, missingIds.length)).toLocaleString()} of ${ids.length.toLocaleString()}`);
   }
   return {
     id, title: playlist.snippet.title, owner: playlist.snippet.channelTitle,
