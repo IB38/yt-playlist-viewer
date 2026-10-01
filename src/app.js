@@ -110,8 +110,9 @@ function showPlaylist(data, preserveView = false) {
   $('unavailable-note').textContent = `${missing ? `${missing} unavailable video${missing === 1 ? '' : 's'} retained in the list. ` : ''}${unknown ? 'Unknown view counts are excluded from the total. ' : ''}Unknown values sort last. Totals count each playlist entry.`;
   if (!preserveView) {
     $('search').value = '';
-    $('sort').value = 'position';
-    direction = 'asc';
+    const remembered = storage?.settings.remember && storage.settings.lastPlaylistId === data.id;
+    $('sort').value = remembered ? storage.settings.sortKey : 'position';
+    direction = remembered ? storage.settings.sortDirection : 'asc';
   }
   renderVideos();
 }
@@ -151,6 +152,7 @@ async function explore(value, force = false) {
     showPlaylist(data, playlist?.id === id);
     lastSuccessfulId = id;
     if (storage.settings.remember) storage.settings.lastPlaylistId = id;
+    captureRememberedSort();
     await storage.save();
     updateStorageNotice();
     $('status').hidden = false;
@@ -166,6 +168,19 @@ $('playlist-form').addEventListener('submit', event => {
 });
 $('refresh-button').addEventListener('click', () => { if (playlist) explore(playlist.id, true); });
 function updateStorageNotice() { $('storage-notice').hidden = storage?.persistent !== false; }
+function captureRememberedSort() {
+  if (storage?.settings.remember && playlist?.id === storage.settings.lastPlaylistId) {
+    storage.settings.sortKey = $('sort').value;
+    storage.settings.sortDirection = direction;
+  }
+}
+async function sortChanged() {
+  renderVideos();
+  if (!storage?.settings.remember) return;
+  captureRememberedSort();
+  await storage.save();
+  updateStorageNotice();
+}
 $('settings-button').addEventListener('click', () => $('settings-dialog').showModal());
 $('remember-playlist').disabled = true;
 $('drop-playlist').disabled = true;
@@ -178,18 +193,21 @@ $('drop-playlist').addEventListener('change', async () => {
 $('remember-playlist').addEventListener('change', async () => {
   storage.settings.remember = $('remember-playlist').checked;
   storage.settings.lastPlaylistId = storage.settings.remember ? lastSuccessfulId : null;
+  storage.settings.sortKey = 'position';
+  storage.settings.sortDirection = 'asc';
+  captureRememberedSort();
   await storage.save();
   updateStorageNotice();
 });
 $('cancel-button').addEventListener('click', () => controller?.abort());
 $('search').addEventListener('input', renderVideos);
-$('sort').addEventListener('change', () => { direction = ['viewCount', 'publishedAt'].includes($('sort').value) ? 'desc' : 'asc'; renderVideos(); });
-$('direction').addEventListener('click', () => { direction = direction === 'asc' ? 'desc' : 'asc'; renderVideos(); });
+$('sort').addEventListener('change', () => { direction = ['viewCount', 'publishedAt'].includes($('sort').value) ? 'desc' : 'asc'; sortChanged(); });
+$('direction').addEventListener('click', () => { direction = direction === 'asc' ? 'desc' : 'asc'; sortChanged(); });
 document.querySelectorAll('th[data-sort] button').forEach(button => button.addEventListener('click', () => {
   const key = button.parentElement.dataset.sort;
   if ($('sort').value === key) direction = direction === 'asc' ? 'desc' : 'asc';
   else { $('sort').value = key; direction = key === 'title' ? 'asc' : 'desc'; }
-  renderVideos();
+  sortChanged();
 }));
 storageReady.then(value => {
   storage = value;

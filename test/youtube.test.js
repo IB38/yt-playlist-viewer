@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlaylistId, sortVideos, loadPlaylist } from '../src/youtube.js';
-import { openStorage } from '../src/storage.js';
+import { openStorage, normalizeSettings } from '../src/storage.js';
 
 test('accepts playlist IDs and YouTube URLs, rejects foreign URLs and video-only URLs', () => {
   const id = 'PL_test-playlist_123';
@@ -173,7 +173,7 @@ test('playlist and video expiry are independent; stale preview survives refresh 
 test('unavailable browser storage falls back to usable memory', async () => {
   const storage = await openStorage({ open() { throw new Error('Storage blocked'); } });
   assert.equal(storage.persistent, false);
-  assert.deepEqual(storage.settings, { remember: false, lastPlaylistId: null, dropPlaylist: false });
+  assert.deepEqual(storage.settings, { remember: false, lastPlaylistId: null, dropPlaylist: false, sortKey: 'position', sortDirection: 'asc' });
   storage.settings.remember = true;
   storage.settings.lastPlaylistId = 'PL_test-playlist_123';
   storage.videos.set('video', { video: null, savedAt: Date.now() });
@@ -183,4 +183,18 @@ test('unavailable browser storage falls back to usable memory', async () => {
   storage.settings.lastPlaylistId = null;
   await storage.save();
   assert.equal(storage.settings.lastPlaylistId, null);
+});
+
+test('remembered sorting supports old settings, validates values, and resets when disabled', () => {
+  const legacy = normalizeSettings({ remember: true, lastPlaylistId: 'playlist' });
+  assert.equal(legacy.sortKey, 'position');
+  assert.equal(legacy.sortDirection, 'asc');
+  const saved = { ...legacy, sortKey: 'viewCount', sortDirection: 'desc' };
+  assert.deepEqual(normalizeSettings(saved), saved);
+  assert.equal(normalizeSettings({ ...saved, sortKey: 'invalid' }).sortKey, 'position');
+  assert.equal(normalizeSettings({ ...saved, sortDirection: 'invalid' }).sortDirection, 'asc');
+  const disabled = normalizeSettings({ ...saved, remember: false });
+  assert.equal(disabled.sortKey, 'position');
+  assert.equal(disabled.sortDirection, 'asc');
+  assert.equal(disabled.lastPlaylistId, null);
 });

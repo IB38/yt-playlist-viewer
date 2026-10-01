@@ -11,6 +11,8 @@ try {
   first.settings.dropPlaylist = true;
   first.settings.remember = true;
   first.settings.lastPlaylistId = 'PL_test-playlist_123';
+  first.settings.sortKey = 'viewCount';
+  first.settings.sortDirection = 'desc';
   first.playlists.set('test', { savedAt: Date.now(), data: { videos: [{ viewCount: 123n }] } });
   first.videos.set('old', { savedAt: 0 });
   first.videos.set('fresh', { savedAt: Date.now(), video: { id: 'fresh' } });
@@ -18,6 +20,7 @@ try {
   first.close();
   second = await openStorage(indexedDB, name);
   assert(second.settings.dropPlaylist === true, 'Drop playlist preference must survive reopening');
+  assert(second.settings.sortKey === 'viewCount' && second.settings.sortDirection === 'desc', 'Sort field and direction must survive reopening');
   assert(second.settings.remember && second.settings.lastPlaylistId === 'PL_test-playlist_123', 'Remember setting must survive reopening');
   assert(second.playlists.get('test').data.videos[0].viewCount === 123n, 'Playlist and BigInt must survive reopening');
   assert(second.videos.has('fresh') && !second.videos.has('old'), 'Fresh video must persist; old video must be pruned');
@@ -27,6 +30,7 @@ try {
   second.close();
   third = await openStorage(indexedDB, name);
   assert(!third.settings.remember && third.settings.lastPlaylistId === null, 'Disabling must remove saved selection');
+  assert(third.settings.sortKey === 'position' && third.settings.sortDirection === 'asc', 'Disabling must reset saved sort order');
   assert(third.playlists.size === 1, 'Disabling remembrance must keep cache');
   result.textContent = 'PASS: persistence, BigInt round-trip, old-entry cleanup, remember setting, disabling remembrance, independent caching.';
 } catch (error) { result.textContent = `FAIL: ${error.stack}`; }

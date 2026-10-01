@@ -1,8 +1,18 @@
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
+export function normalizeSettings(value = {}) {
+  return {
+    remember: value.remember === true,
+    lastPlaylistId: value.remember === true && typeof value.lastPlaylistId === 'string' ? value.lastPlaylistId : null,
+    dropPlaylist: value.dropPlaylist === true,
+    sortKey: value.remember === true && ['position', 'title', 'viewCount', 'publishedAt'].includes(value.sortKey) ? value.sortKey : 'position',
+    sortDirection: value.remember === true && value.sortDirection === 'desc' ? 'desc' : 'asc',
+  };
+}
+
 // Database names are scoped to this app, since GitHub Pages projects share an origin.
 export async function openStorage(indexedDB, databaseName = 'playlist-lens-v1') {
-  const state = { videos: new Map(), playlists: new Map(), settings: { remember: false, lastPlaylistId: null, dropPlaylist: false } };
+  const state = { videos: new Map(), playlists: new Map(), settings: normalizeSettings() };
   let db;
   let persistent = true;
   let queue = Promise.resolve();
@@ -32,7 +42,7 @@ export async function openStorage(indexedDB, databaseName = 'playlist-lens-v1') 
         if (!cursor) return;
         const { key, value } = cursor;
         if (key === 'settings') {
-          state.settings = { remember: value.remember === true, lastPlaylistId: value.remember && typeof value.lastPlaylistId === 'string' ? value.lastPlaylistId : null, dropPlaylist: value.dropPlaylist === true };
+          state.settings = normalizeSettings(value);
         } else if (!Number.isFinite(value.savedAt) || value.savedAt < Date.now() - RETENTION_MS) cursor.delete();
         else if (key.startsWith('video:')) state.videos.set(key.slice(6), value);
         else if (key.startsWith('playlist:')) state.playlists.set(key.slice(9), value);
