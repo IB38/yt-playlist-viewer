@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { loadPlaylist, parsePlaylistId, sortVideos } from './youtube.js';
+import { openStorage } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const number = new Intl.NumberFormat('en-US');
@@ -12,6 +13,10 @@ const localDateTime = new Intl.DateTimeFormat(undefined, {
 let playlist = null;
 let direction = 'asc';
 let controller = null;
+let lastSuccessfulId = null;
+let userStarted = false;
+const storageReady = openStorage();
+let storage;
 
 $('setup-notice').hidden = Boolean(config.youtubeApiKey.trim());
 
@@ -78,7 +83,7 @@ function renderVideos() {
   });
 }
 
-function showPlaylist(data, demo = false) {
+function showPlaylist(data, demo = false, preserveView = false) {
   playlist = data;
   $('welcome').hidden = true;
   $('results').hidden = false;
@@ -86,6 +91,8 @@ function showPlaylist(data, demo = false) {
   $('playlist-title').textContent = data.title;
   $('playlist-owner').textContent = demo ? 'A preview of what your playlist could look like. All statistics are illustrative.' : `Curated by ${data.owner}`;
   $('playlist-link').hidden = demo;
+  $('freshness').hidden = demo;
+  $('last-updated').textContent = data.updatedAt ? `Last updated: ${localDateTime.format(new Date(data.updatedAt))} · Oldest data shown` : '';
   $('playlist-link').href = `https://www.youtube.com/playlist?list=${encodeURIComponent(data.id)}`;
   $('video-count').textContent = number.format(data.videos.length);
   const known = data.videos.filter(video => video.viewCount != null);
@@ -97,9 +104,11 @@ function showPlaylist(data, demo = false) {
   const unknown = data.videos.length - known.length;
   $('unavailable-note').hidden = !missing && !unknown;
   $('unavailable-note').textContent = `${missing ? `${missing} unavailable video${missing === 1 ? '' : 's'} retained in the list. ` : ''}${unknown ? 'Unknown view counts are excluded from the total. ' : ''}Unknown values sort last. Totals count each playlist entry.`;
-  $('search').value = '';
-  $('sort').value = 'position';
-  direction = 'asc';
+  if (!preserveView) {
+    $('search').value = '';
+    $('sort').value = 'position';
+    direction = 'asc';
+  }
   renderVideos();
 }
 
@@ -108,31 +117,59 @@ function setBusy(busy) {
   $('load-button').textContent = busy ? 'Loading…' : 'Explore playlist →';
   $('cancel-button').hidden = !busy;
   $('demo-button').disabled = busy;
+  $('refresh-button').disabled = busy;
   $('results').setAttribute('aria-busy', String(busy));
 }
 
-$('playlist-form').addEventListener('submit', async event => {
-  event.preventDefault();
+async function explore(value, force = false) {
+  if (controller) return;
+  userStarted = true;
   $('error').hidden = true;
   $('status').hidden = true;
   let id;
   try {
-    id = parsePlaylistId($('playlist-input').value);
-    if (!config.youtubeApiKey.trim()) throw new Error('The shared API key is not configured yet. Add it to config.js or set the YOUTUBE_API_KEY deployment variable.');
+    id = parsePlaylistId(value);
   } catch (error) { $('error').textContent = error.message; $('error').hidden = false; return; }
   controller = new AbortController();
   setBusy(true);
+  let showedSaved = false;
   try {
+    storage = await storageReady;
+    controller.signal.throwIfAborted();
     const data = await loadPlaylist(id, config.youtubeApiKey.trim(), {
       signal: controller.signal,
+      videoCache: storage.videos, playlistCache: storage.playlists, force,
+      onCached: data => {
+        showPlaylist(data, false, playlist?.id === id);
+        showedSaved = true;
+      },
       onProgress: message => { $('status').hidden = false; $('status').textContent = message; },
     });
-    showPlaylist(data);
+    showPlaylist(data, false, playlist?.id === id);
+    lastSuccessfulId = id;
+    if (storage.settings.remember) storage.settings.lastPlaylistId = id;
+    await storage.save();
+    updateStorageNotice();
+    $('status').hidden = false;
     $('status').textContent = `Loaded ${number.format(data.videos.length)} videos.`;
   } catch (error) {
-    if (controller.signal.aborted) { $('status').hidden = false; $('status').textContent = 'Loading canceled.'; }
-    else { $('status').hidden = true; $('error').textContent = error.message; $('error').hidden = false; }
+    if (controller.signal.aborted) { $('status').hidden = false; $('status').textContent = showedSaved ? 'Refresh canceled. Showing saved data.' : 'Loading canceled.'; }
+    else { $('status').hidden = true; $('error').textContent = `${showedSaved ? 'Could not refresh. Showing saved data. ' : ''}${error.message}`; $('error').hidden = false; }
   } finally { controller = null; setBusy(false); }
+}
+$('playlist-form').addEventListener('submit', event => {
+  event.preventDefault();
+  explore($('playlist-input').value);
+});
+$('refresh-button').addEventListener('click', () => { if (playlist && playlist.id !== 'demo') explore(playlist.id, true); });
+function updateStorageNotice() { $('storage-notice').hidden = storage?.persistent !== false; }
+$('settings-button').addEventListener('click', () => $('settings-dialog').showModal());
+$('remember-playlist').disabled = true;
+$('remember-playlist').addEventListener('change', async () => {
+  storage.settings.remember = $('remember-playlist').checked;
+  storage.settings.lastPlaylistId = storage.settings.remember ? lastSuccessfulId : null;
+  await storage.save();
+  updateStorageNotice();
 });
 $('cancel-button').addEventListener('click', () => controller?.abort());
 $('search').addEventListener('input', renderVideos);
@@ -145,6 +182,7 @@ document.querySelectorAll('th[data-sort] button').forEach(button => button.addEv
   renderVideos();
 }));
 $('demo-button').addEventListener('click', () => {
+  userStarted = true;
   $('error').hidden = true; $('status').hidden = true;
   const samples = [
     ['The art of paying attention', 'The Curious Mind', 1284530n, '2025-08-14'],
@@ -155,4 +193,14 @@ $('demo-button').addEventListener('click', () => {
     ['Make time for what matters', 'Slow Sundays', 623450n, '2026-02-01'],
   ];
   showPlaylist({ id: 'demo', title: 'A little curiosity goes a long way', owner: 'Playlist Lens', videos: samples.map(([title, channel, viewCount, publishedAt], position) => ({ title, channel, viewCount, publishedAt, position, url: null, thumbnail: null, unavailable: false })) }, true);
+});
+storageReady.then(value => {
+  storage = value;
+  $('remember-playlist').checked = storage.settings.remember;
+  $('remember-playlist').disabled = false;
+  updateStorageNotice();
+  if (!userStarted && storage.settings.remember && storage.settings.lastPlaylistId) {
+    $('playlist-input').value = storage.settings.lastPlaylistId;
+    explore(storage.settings.lastPlaylistId);
+  }
 });

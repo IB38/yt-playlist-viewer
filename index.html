@@ -11,7 +11,14 @@
     <script type="module" src="./src/app.js"></script>
   </head>
   <body>
-    <header class="site-header"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">▶</span>Playlist<span class="brand-light">Lens</span></a><span class="header-note">A clearer view of YouTube</span></header>
+    <header class="site-header"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">▶</span>Playlist<span class="brand-light">Lens</span></a><button id="settings-button" type="button" class="secondary" aria-haspopup="dialog"><span aria-hidden="true">⚙</span> Settings</button></header>
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+      <form method="dialog" class="settings-heading"><h2 id="settings-title">Settings</h2><button class="secondary" aria-label="Close settings">×</button></form>
+      <label class="setting-option"><input id="remember-playlist" type="checkbox"> Remember last playlist</label>
+      <p class="muted">Automatically reopen your last successfully loaded playlist on this browser.</p>
+      <p class="muted">Playlists are cached for 1 hour and video details for 24 hours. Use Refresh now to get the latest data. Saved data stays on this device.</p>
+      <p id="storage-notice" role="status" class="muted" hidden>Browser storage is unavailable. Settings and cached data will only last until this page is closed or refreshed.</p>
+    </dialog>
     <main>
       <section class="intro">
         <div class="eyebrow"><span></span> YOUR PLAYLIST, IN PERSPECTIVE</div>
@@ -36,9 +43,10 @@
         <div class="playlist-heading"><div><div class="eyebrow" id="playlist-label">PLAYLIST OVERVIEW</div><h2 id="playlist-title"></h2><p id="playlist-owner"></p></div><a id="playlist-link" class="secondary" target="_blank" rel="noopener noreferrer">Open in YouTube ↗</a></div>
         <div class="stats"><div><span>Videos in playlist</span><strong id="video-count">0</strong></div><div><span>Total video views</span><strong id="total-views">0</strong></div><div><span>Latest upload</span><strong id="latest-upload">—</strong></div></div>
         <p id="unavailable-note" class="muted" hidden></p>
+        <div id="freshness" class="freshness" hidden><span id="last-updated"></span><button id="refresh-button" class="secondary" type="button">Refresh now</button></div>
         <div class="toolbar"><div class="search-wrap"><label class="sr-only" for="search">Search video titles</label><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a video…"></div><div class="sort-controls"><label for="sort">Sort by</label><select id="sort"><option value="position">Playlist order</option><option value="title">Title</option><option value="viewCount">View count</option><option value="publishedAt">Upload date</option></select><button id="direction" class="secondary" type="button" aria-label="Switch to descending order" title="Switch to descending order">↑</button></div></div>
         <div class="table-wrap"><table><caption class="sr-only">Playlist videos and statistics</caption><thead><tr><th scope="col" class="number-column">#</th><th scope="col" data-sort="title"><button type="button">Video <span aria-hidden="true">↕</span></button></th><th scope="col" data-sort="viewCount" class="views-column"><button type="button">Views <span aria-hidden="true">↕</span></button></th><th scope="col" data-sort="publishedAt" class="date-column"><button type="button">Uploaded <span aria-hidden="true">↕</span></button></th></tr></thead><tbody id="video-rows"></tbody></table><p id="no-results" hidden>No videos match your search.</p></div>
-        <div class="table-footer"><span id="visible-count"></span><span>Upload dates shown in UTC</span></div>
+        <div class="table-footer"><span id="visible-count"></span><span>Dates shown in UTC · Hover for local date and time</span></div>
       </section>
     </main>
     <footer><span class="footer-brand">Playlist Lens</span><span>A little more insight. A lot less scrolling.</span><a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer">YouTube ↗</a></footer>

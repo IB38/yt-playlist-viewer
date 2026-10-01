@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Storage integration checks</title><h1>Storage integration checks</h1><pre id="result">Running…</pre><script type="module">
+import { openStorage } from '../src/storage.js';
+const name = `playlist-lens-test-${Date.now()}`;
+const result = document.getElementById('result');
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+let first, second, third;
+try {
+  first = await openStorage(indexedDB, name);
+  assert(first.persistent, 'IndexedDB should be available');
+  first.settings.remember = true;
+  first.settings.lastPlaylistId = 'PL_test-playlist_123';
+  first.playlists.set('test', { savedAt: Date.now(), data: { videos: [{ viewCount: 123n }] } });
+  first.videos.set('old', { savedAt: 0 });
+  first.videos.set('fresh', { savedAt: Date.now(), video: { id: 'fresh' } });
+  await first.save();
+  first.close();
+  second = await openStorage(indexedDB, name);
+  assert(second.settings.remember && second.settings.lastPlaylistId === 'PL_test-playlist_123', 'Remember setting must survive reopening');
+  assert(second.playlists.get('test').data.videos[0].viewCount === 123n, 'Playlist and BigInt must survive reopening');
+  assert(second.videos.has('fresh') && !second.videos.has('old'), 'Fresh video must persist; old video must be pruned');
+  second.settings.remember = false;
+  second.settings.lastPlaylistId = null;
+  await second.save();
+  second.close();
+  third = await openStorage(indexedDB, name);
+  assert(!third.settings.remember && third.settings.lastPlaylistId === null, 'Disabling must remove saved selection');
+  assert(third.playlists.size === 1, 'Disabling remembrance must keep cache');
+  result.textContent = 'PASS: persistence, BigInt round-trip, old-entry cleanup, remember setting, disabling remembrance, independent caching.';
+} catch (error) { result.textContent = `FAIL: ${error.stack}`; }
+finally { first?.close(); second?.close(); third?.close(); indexedDB.deleteDatabase(name); }
+</script></html>

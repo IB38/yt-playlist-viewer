@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlaylistId, sortVideos, loadPlaylist } from '../src/youtube.js';
+import { openStorage } from '../src/storage.js';
 
 test('accepts playlist IDs and YouTube URLs, rejects foreign URLs and video-only URLs', () => {
   const id = 'PL_test-playlist_123';
@@ -135,4 +136,51 @@ test('failed and canceled video requests do not poison the cache', async () => {
   await loadPlaylist('first', 'key', fixture);
   assert.equal(fixture.videoCache.size, 2);
   assert.equal(fixture.batches.length, 3);
+});
+
+test('fresh persisted playlist and videos need no API requests; force refresh bypasses both', async () => {
+  const fixture = { ...cachedPlaylistFixture(), playlistCache: new Map() };
+  const original = await loadPlaylist('first', 'key', fixture);
+  const restored = { ...fixture, videoCache: structuredClone(fixture.videoCache), playlistCache: structuredClone(fixture.playlistCache) };
+  let preview;
+  const cached = await loadPlaylist('first', '', { ...restored, onCached: data => { preview = data; }, fetchImpl: () => { throw new Error('Unexpected fetch'); } });
+  assert.deepEqual(cached, original);
+  assert.deepEqual(preview, original);
+  const endpoints = [];
+  await loadPlaylist('first', 'key', { ...restored, force: true, fetchImpl: url => { endpoints.push(url.pathname.split('/').at(-1)); return fixture.fetchImpl(url); } });
+  assert.deepEqual(endpoints, ['playlists', 'playlistItems', 'videos']);
+});
+
+test('playlist and video expiry are independent; stale preview survives refresh failure', async () => {
+  const fixture = { ...cachedPlaylistFixture(), playlistCache: new Map() };
+  await loadPlaylist('first', 'key', fixture);
+  const endpoints = [];
+  const tracked = { ...fixture, fetchImpl: url => { endpoints.push(url.pathname.split('/').at(-1)); return fixture.fetchImpl(url); } };
+  fixture.playlistCache.get('first').expiresAt = 0;
+  await loadPlaylist('first', 'key', tracked);
+  assert.deepEqual(endpoints, ['playlists', 'playlistItems']);
+  endpoints.length = 0;
+  for (const entry of fixture.videoCache.values()) entry.expiresAt = 0;
+  await loadPlaylist('first', 'key', tracked);
+  assert.deepEqual(endpoints, ['videos']);
+  const saved = fixture.playlistCache.get('first').data;
+  let preview;
+  await assert.rejects(loadPlaylist('first', 'key', { ...fixture, force: true, onCached: data => { preview = data; }, fetchImpl: async () => { throw new Error('Offline'); } }), /internet connection/);
+  assert.deepEqual(preview, saved);
+  assert.deepEqual(fixture.playlistCache.get('first').data, saved);
+});
+
+test('unavailable browser storage falls back to usable memory', async () => {
+  const storage = await openStorage({ open() { throw new Error('Storage blocked'); } });
+  assert.equal(storage.persistent, false);
+  assert.deepEqual(storage.settings, { remember: false, lastPlaylistId: null });
+  storage.settings.remember = true;
+  storage.settings.lastPlaylistId = 'PL_test-playlist_123';
+  storage.videos.set('video', { video: null, savedAt: Date.now() });
+  await storage.save();
+  assert.equal(storage.videos.size, 1);
+  storage.settings.remember = false;
+  storage.settings.lastPlaylistId = null;
+  await storage.save();
+  assert.equal(storage.settings.lastPlaylistId, null);
 });

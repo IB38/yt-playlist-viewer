@@ -40,12 +40,14 @@ function apiError(status, body) {
   return 'YouTube is temporarily unavailable. Please try again.';
 }
 
-// Shared across playlist loads in this tab; refreshing the page clears it.
+// In-memory default for callers; the app supplies maps restored from IndexedDB.
 const videoDetailsCache = new Map();
-const VIDEO_CACHE_TTL_MS = 60 * 60 * 1000;
+const VIDEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const PLAYLIST_CACHE_TTL_MS = 60 * 60 * 1000;
 
-export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, fetchImpl = fetch, videoCache = videoDetailsCache } = {}) {
+export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, fetchImpl = fetch, videoCache = videoDetailsCache, playlistCache = new Map(), force = false, onCached = () => {} } = {}) {
   async function request(endpoint, params) {
+    if (!apiKey.trim()) throw new Error('The shared API key is not configured yet. Add it to config.js or set the YOUTUBE_API_KEY deployment variable.');
     const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
     url.search = new URLSearchParams({ ...params, key: apiKey });
     let response;
@@ -62,17 +64,25 @@ export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, 
     return body;
   }
   onProgress('Finding your playlist…');
-  const metadata = await request('playlists', { part: 'snippet', id });
-  const playlist = metadata.items?.[0];
-  if (!playlist) throw new Error('Playlist not found. Check the link and make sure the playlist is public or unlisted.');
-  const entries = [];
-  let pageToken = '';
-  do {
-    const page = await request('playlistItems', { part: 'snippet,contentDetails', playlistId: id, maxResults: '50', ...(pageToken ? { pageToken } : {}) });
-    entries.push(...(page.items || []));
-    onProgress(`Found ${entries.length.toLocaleString()} playlist entries…`);
-    pageToken = page.nextPageToken || '';
-  } while (pageToken);
+  const cachedPlaylist = playlistCache.get(id);
+  if (cachedPlaylist?.data) onCached(cachedPlaylist.data);
+  let playlist, entries, playlistUpdatedAt;
+  if (!force && cachedPlaylist?.expiresAt > Date.now()) {
+    ({ playlist, entries, playlistUpdatedAt } = cachedPlaylist);
+  } else {
+    const metadata = await request('playlists', { part: 'snippet', id });
+    playlist = metadata.items?.[0];
+    if (!playlist) throw new Error('Playlist not found. Check the link and make sure the playlist is public or unlisted.');
+    entries = [];
+    let pageToken = '';
+    do {
+      const page = await request('playlistItems', { part: 'snippet,contentDetails', playlistId: id, maxResults: '50', ...(pageToken ? { pageToken } : {}) });
+      entries.push(...(page.items || []));
+      onProgress(`Found ${entries.length.toLocaleString()} playlist entries…`);
+      pageToken = page.nextPageToken || '';
+    } while (pageToken);
+    playlistUpdatedAt = Date.now();
+  }
   const ids = [...new Set(entries.map(item => item.contentDetails?.videoId || item.snippet?.resourceId?.videoId).filter(Boolean))];
   const details = new Map();
   const now = Date.now();
@@ -81,7 +91,7 @@ export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, 
   }
   const missingIds = ids.filter(videoId => {
     const cached = videoCache.get(videoId);
-    if (!cached) return true;
+    if (force || !cached) return true;
     details.set(videoId, cached.video);
     return false;
   });
@@ -95,12 +105,14 @@ export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, 
     for (const videoId of batch) {
       // Cache absent videos too, but never cache failed or canceled requests.
       const video = fetched.get(videoId) || null;
-      videoCache.set(videoId, { video, expiresAt });
+      videoCache.set(videoId, { video, expiresAt, savedAt: expiresAt - VIDEO_CACHE_TTL_MS });
       details.set(videoId, video);
     }
     onProgress(`Loading video details · ${(cachedCount + Math.min(offset + 50, missingIds.length)).toLocaleString()} of ${ids.length.toLocaleString()}`);
   }
-  return {
+  const updatedAt = ids.reduce((oldest, videoId) => Math.min(oldest, videoCache.get(videoId)?.savedAt ?? playlistUpdatedAt), playlistUpdatedAt);
+  const data = {
+    updatedAt, playlistUpdatedAt,
     id, title: playlist.snippet.title, owner: playlist.snippet.channelTitle,
     videos: entries.map((item, position) => {
       const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
@@ -118,4 +130,7 @@ export async function loadPlaylist(id, apiKey, { signal, onProgress = () => {}, 
       };
     }),
   };
+  signal?.throwIfAborted();
+  playlistCache.set(id, { playlist, entries, playlistUpdatedAt, data, savedAt: Date.now(), expiresAt: playlistUpdatedAt + PLAYLIST_CACHE_TTL_MS });
+  return data;
 }

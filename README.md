@@ -20,7 +20,7 @@ Open http://127.0.0.1:5173. Use **Try a demo** for an explicitly labeled preview
 4. Under application restrictions, choose **Websites (HTTP referrers)** and allow your deployed origin, for example `https://YOUR_USERNAME.github.io/*`. Add your custom domain if applicable. For local development, allow `http://127.0.0.1:5173/*` (or use a separate development key).
 5. Set `youtubeApiKey` in `config.js` for local use, or set the GitHub repository Actions **variable** `YOUTUBE_API_KEY` for deployment.
 
-This is a browser application: the shared key is visible to visitors and consumes a shared quota. A build variable or GitHub secret cannot hide a key embedded in a static site. Restrict the key, monitor quota, and rotate it if needed. The app does not store keys or playlist data in browser storage. Requests go directly to Google; the stylesheet also loads Google Fonts with system font fallbacks.
+This is a browser application: the shared key is visible to visitors and consumes a shared quota. A build variable or GitHub secret cannot hide a key embedded in a static site. Restrict the key, monitor quota, and rotate it if needed. The app never stores API keys in browser storage. Playlist data, video details, and the optional remembered playlist selection are saved locally in IndexedDB. Requests go directly to Google; the stylesheet also loads Google Fonts with system font fallbacks.
 
 Documentation: [YouTube API setup](https://developers.google.com/youtube/v3/getting-started), [API key restrictions](https://cloud.google.com/docs/authentication/api-keys#api_key_restrictions).
 
@@ -46,7 +46,9 @@ npm run build
 
 - Accepts a playlist ID or a YouTube URL containing a `list` parameter, including mobile, music, and watch links.
 - Loads the playlist name and every available page of playlist entries, then fetches video metadata in batches of 50 unique video IDs.
-- Caches video details (including unavailable results) in memory by video ID for one hour. Repeated loads and overlapping playlists fetch only missing or expired video details, still in batches of up to 50. Playlist names and membership are fetched on each load. Refreshing or closing the page clears the cache; it is not shared across tabs or visitors. View counts can remain unchanged during the cache lifetime. Failed or canceled requests are not cached.
+- Persists playlist names and membership for 1 hour and video details (including unavailable results) by video ID for 24 hours in IndexedDB. Overlapping playlists reuse video details. Fresh saved results need no API requests; expired results appear immediately while the app refreshes them. Failed refreshes retain the saved view. Refresh now bypasses both caches. Last updated reports the oldest data in the displayed result.
+- The gear button opens Settings. Remember last playlist defaults to off; enabling it saves the last successfully loaded playlist and automatically reopens it on future visits. Disabling it removes the saved selection without deleting the cache. Demo data is never remembered or cached.
+- Cache records older than 7 days are removed when storage opens or saves. Storage is browser/device-specific and may be evicted by the browser. Storage failures fall back to memory and show a notice in Settings. API keys are never persisted. Failed or canceled API requests are not cached.
 - Lists each video's title, clickable URL, exact view count, and upload/publication date in UTC.
 - Hover over an upload date to see the full publication date and time in your browser's local timezone, including the timezone name.
 - Sorts by title, view count, or date in either direction, or restores playlist order. Title search works locally without API requests.
@@ -58,3 +60,5 @@ npm run build
 API references: [playlists.list](https://developers.google.com/youtube/v3/docs/playlists/list), [playlistItems.list](https://developers.google.com/youtube/v3/docs/playlistItems/list), [videos.list](https://developers.google.com/youtube/v3/docs/videos/list).
 
 Tests use mocked YouTube responses to cover URL validation, sorting, pagination, batching, duplicates, unavailable entries, empty playlists, errors, and cancellation. A live API check requires your configured key.
+
+For real IndexedDB integration checks, run the local server and open `/test/storage-browser.html`. This uses an isolated temporary database to verify persistence, BigInt serialization, cleanup, and the remembered selection. Test pages are excluded from the production build.
