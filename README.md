@@ -14,7 +14,7 @@ Requires Node.js 22 or later. No package installation is needed.
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. **Try a demo** works without an API key. To load real playlists locally, set `youtubeApiKey` in `config.js` using a key that allows your local origin.
+Open http://127.0.0.1:5173. To load real playlists locally, set `youtubeApiKey` in `config.js` using a key that allows your local origin.
 
 ## Create a YouTube API key
 

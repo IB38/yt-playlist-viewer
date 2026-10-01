@@ -89,15 +89,13 @@ function renderVideos() {
   });
 }
 
-function showPlaylist(data, demo = false, preserveView = false) {
+function showPlaylist(data, preserveView = false) {
   playlist = data;
   $('welcome').hidden = true;
   $('results').hidden = false;
-  $('playlist-label').textContent = demo ? 'DEMO PLAYLIST · SAMPLE DATA' : 'PLAYLIST OVERVIEW';
   $('playlist-title').textContent = data.title;
-  $('playlist-owner').textContent = demo ? 'A preview of what your playlist could look like. All statistics are illustrative.' : `Curated by ${data.owner}`;
-  $('playlist-link').hidden = demo;
-  $('freshness').hidden = demo;
+  $('playlist-owner').textContent = `Curated by ${data.owner}`;
+  $('freshness').hidden = false;
   $('last-updated').textContent = data.updatedAt ? `Last updated: ${localDateTime.format(new Date(data.updatedAt))} · Oldest data shown` : '';
   $('playlist-link').href = `https://www.youtube.com/playlist?list=${encodeURIComponent(data.id)}`;
   $('video-count').textContent = number.format(data.videos.length);
@@ -122,7 +120,6 @@ function setBusy(busy) {
   $('load-button').disabled = busy;
   $('load-button').textContent = busy ? 'Loading…' : 'Explore playlist →';
   $('cancel-button').hidden = !busy;
-  $('demo-button').disabled = busy;
   $('refresh-button').disabled = busy;
   $('results').setAttribute('aria-busy', String(busy));
 }
@@ -146,12 +143,12 @@ async function explore(value, force = false) {
       signal: controller.signal,
       videoCache: storage.videos, playlistCache: storage.playlists, force,
       onCached: data => {
-        showPlaylist(data, false, playlist?.id === id);
+        showPlaylist(data, playlist?.id === id);
         showedSaved = true;
       },
       onProgress: message => { $('status').hidden = false; $('status').textContent = message; },
     });
-    showPlaylist(data, false, playlist?.id === id);
+    showPlaylist(data, playlist?.id === id);
     lastSuccessfulId = id;
     if (storage.settings.remember) storage.settings.lastPlaylistId = id;
     await storage.save();
@@ -167,7 +164,7 @@ $('playlist-form').addEventListener('submit', event => {
   event.preventDefault();
   explore($('playlist-input').value);
 });
-$('refresh-button').addEventListener('click', () => { if (playlist && playlist.id !== 'demo') explore(playlist.id, true); });
+$('refresh-button').addEventListener('click', () => { if (playlist) explore(playlist.id, true); });
 function updateStorageNotice() { $('storage-notice').hidden = storage?.persistent !== false; }
 $('settings-button').addEventListener('click', () => $('settings-dialog').showModal());
 $('remember-playlist').disabled = true;
@@ -194,19 +191,6 @@ document.querySelectorAll('th[data-sort] button').forEach(button => button.addEv
   else { $('sort').value = key; direction = key === 'title' ? 'asc' : 'desc'; }
   renderVideos();
 }));
-$('demo-button').addEventListener('click', () => {
-  userStarted = true;
-  $('error').hidden = true; $('status').hidden = true;
-  const samples = [
-    ['The art of paying attention', 'The Curious Mind', 1284530n, '2025-08-14'],
-    ['Why good design feels invisible', 'Design Notes', 892104n, '2025-11-03'],
-    ['A small guide to big ideas', 'The Curious Mind', 2418900n, '2024-06-22'],
-    ['Finding creativity in everyday places', 'Studio Sessions', 346781n, '2026-01-18'],
-    ['How we learn something new', 'Open Questions', 1705622n, '2025-03-09'],
-    ['Make time for what matters', 'Slow Sundays', 623450n, '2026-02-01'],
-  ];
-  showPlaylist({ id: 'demo', title: 'A little curiosity goes a long way', owner: 'Playlist Lens', videos: samples.map(([title, channel, viewCount, publishedAt], position) => ({ title, channel, viewCount, publishedAt, position, url: null, thumbnail: null, unavailable: false })) }, true);
-});
 storageReady.then(value => {
   storage = value;
   $('remember-playlist').checked = storage.settings.remember;
