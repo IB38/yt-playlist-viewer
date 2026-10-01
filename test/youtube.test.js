@@ -173,7 +173,7 @@ test('playlist and video expiry are independent; stale preview survives refresh 
 test('unavailable browser storage falls back to usable memory', async () => {
   const storage = await openStorage({ open() { throw new Error('Storage blocked'); } });
   assert.equal(storage.persistent, false);
-  assert.deepEqual(storage.settings, { remember: false, lastPlaylistId: null });
+  assert.deepEqual(storage.settings, { remember: false, lastPlaylistId: null, dropPlaylist: false });
   storage.settings.remember = true;
   storage.settings.lastPlaylistId = 'PL_test-playlist_123';
   storage.videos.set('video', { video: null, savedAt: Date.now() });

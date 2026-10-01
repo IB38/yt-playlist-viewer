@@ -33,6 +33,12 @@ function renderVideos() {
   const videos = sortVideos(playlist.videos.filter(video => video.title.toLocaleLowerCase().includes(query)), $('sort').value, direction);
   const fragment = document.createDocumentFragment();
   for (const video of videos) {
+    let videoUrl = video.url;
+    if (videoUrl && storage?.settings.dropPlaylist) {
+      const url = new URL(videoUrl);
+      url.searchParams.delete('list');
+      videoUrl = url.href;
+    }
     const row = element('tr');
     row.append(element('td', 'row-number', String(video.position + 1).padStart(2, '0')));
     const cell = element('td');
@@ -47,14 +53,14 @@ function renderVideos() {
       thumb.append(img);
     }
     const info = element('div', 'video-info');
-    const title = element(video.url ? 'a' : 'span', 'video-title', video.title);
-    if (video.url) { title.href = video.url; title.target = '_blank'; title.rel = 'noopener noreferrer'; }
+    const title = element(videoUrl ? 'a' : 'span', 'video-title', video.title);
+    if (videoUrl) { title.href = videoUrl; title.target = '_blank'; title.rel = 'noopener noreferrer'; }
     info.append(title);
     if (video.unavailable) info.append(element('span', 'unavailable', 'Unavailable · private or deleted'));
     else info.append(element('span', 'channel', video.channel));
-    if (video.url) {
-      const link = element('a', 'video-url', video.url);
-      link.href = video.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    if (videoUrl) {
+      const link = element('a', 'video-url', videoUrl);
+      link.href = videoUrl; link.target = '_blank'; link.rel = 'noopener noreferrer';
       info.append(link);
     }
     content.append(thumb, info); cell.append(content); row.append(cell);
@@ -165,6 +171,13 @@ $('refresh-button').addEventListener('click', () => { if (playlist && playlist.i
 function updateStorageNotice() { $('storage-notice').hidden = storage?.persistent !== false; }
 $('settings-button').addEventListener('click', () => $('settings-dialog').showModal());
 $('remember-playlist').disabled = true;
+$('drop-playlist').disabled = true;
+$('drop-playlist').addEventListener('change', async () => {
+  storage.settings.dropPlaylist = $('drop-playlist').checked;
+  renderVideos();
+  await storage.save();
+  updateStorageNotice();
+});
 $('remember-playlist').addEventListener('change', async () => {
   storage.settings.remember = $('remember-playlist').checked;
   storage.settings.lastPlaylistId = storage.settings.remember ? lastSuccessfulId : null;
@@ -198,6 +211,9 @@ storageReady.then(value => {
   storage = value;
   $('remember-playlist').checked = storage.settings.remember;
   $('remember-playlist').disabled = false;
+  $('drop-playlist').checked = storage.settings.dropPlaylist;
+  $('drop-playlist').disabled = false;
+  renderVideos();
   updateStorageNotice();
   if (!userStarted && storage.settings.remember && storage.settings.lastPlaylistId) {
     $('playlist-input').value = storage.settings.lastPlaylistId;

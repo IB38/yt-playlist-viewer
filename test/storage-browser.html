@@ -7,6 +7,8 @@ let first, second, third;
 try {
   first = await openStorage(indexedDB, name);
   assert(first.persistent, 'IndexedDB should be available');
+  assert(first.settings.dropPlaylist === false, 'Drop playlist must default to off');
+  first.settings.dropPlaylist = true;
   first.settings.remember = true;
   first.settings.lastPlaylistId = 'PL_test-playlist_123';
   first.playlists.set('test', { savedAt: Date.now(), data: { videos: [{ viewCount: 123n }] } });
@@ -15,6 +17,7 @@ try {
   await first.save();
   first.close();
   second = await openStorage(indexedDB, name);
+  assert(second.settings.dropPlaylist === true, 'Drop playlist preference must survive reopening');
   assert(second.settings.remember && second.settings.lastPlaylistId === 'PL_test-playlist_123', 'Remember setting must survive reopening');
   assert(second.playlists.get('test').data.videos[0].viewCount === 123n, 'Playlist and BigInt must survive reopening');
   assert(second.videos.has('fresh') && !second.videos.has('old'), 'Fresh video must persist; old video must be pruned');
