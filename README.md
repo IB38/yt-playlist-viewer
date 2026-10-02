@@ -2,6 +2,8 @@
 
 A responsive, single-page YouTube playlist explorer for GitHub Pages. Plain HTML, CSS, and JavaScript; no runtime dependencies or backend.
 
+![Playlist Lens displaying the Google I/O '26 playlist with video titles, view counts, and upload dates](docs/playlist-lens.png)
+
 ## Production site
 
 Visit **[playlist-lens.dev](https://playlist-lens.dev/)**, hosted on GitHub Pages with a custom domain.
